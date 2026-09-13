@@ -61,6 +61,11 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v3
 
+      - name: Set up Docker CLI
+        uses: docker/setup-cli-action@v3
+        with:
+          version: latest
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
