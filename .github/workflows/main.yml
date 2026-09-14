@@ -157,15 +157,14 @@ jobs:
           host: ${{ secrets.HOST }}
           username: \${{ secrets.USER }}
           key: ${{ secrets.SSH_KEY }}
+          debug: true
           script: |
             cd taski
             
+            echo "=== START DEPLOY SCRIPT ==="
+
             if [ ! -f .env ]; then
               echo "ERROR: .env file not found!"
-              exit 1
-            fi
-            if [ ! -r .env ]; then
-              echo "ERROR: .env file is not readable!"
               exit 1
             fi
             echo ".env file checked."
@@ -175,14 +174,14 @@ jobs:
             
             echo "Pulling latest images..."
             if ! sudo docker compose -f docker-compose.production.yml pull; then
-              echo "ERROR: Failed to pull images. Check disk space or image names."
+              echo "ERROR: Failed to pull images!"
               exit 1
             fi
 
             echo "Starting new containers..."
             sudo docker compose -f docker-compose.production.yml up -d
 
-            echo "Waiting for services to initialize..."
+            echo "Waiting for services to initialize (15s)..."
             sleep 15
             
             echo "Running migrations..."
@@ -197,10 +196,14 @@ jobs:
               exit 1
             fi
             
+            echo "Preparing static volume directory..."
+            sudo mkdir -p /backend_static/static
+            sudo chown -R $USER:$USER /backend_static/static
+            
             echo "Copying static files to volume..."
             if ! sudo docker compose -f docker-compose.production.yml exec -T backend cp -r /app/collected_static/. /backend_static/static/; then
-              echo "ERROR: Failed to copy static files to volume!"
+              echo "ERROR: Failed to copy static files!"
               exit 1
             fi
             
-            echo "Deploy finished successfully!"
+            echo "=== DEPLOY FINISHED SUCCESSFULLY ==="
