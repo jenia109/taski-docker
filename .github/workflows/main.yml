@@ -154,25 +154,45 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-      - name: Copy docker-compose.yml via ssh
+      
+      - name: Copy docker-compose file to server
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USER }}
           key: ${{ secrets.SSH_KEY }}
           source: "docker-compose.production.yml"
-          target: "taski"
-      - name: Executing remote ssh commands to deploy
+          target: "/home/ubuntu/taski/"
+
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            cd taski
+            cd /home/ubuntu/taski
+            
+            if [ ! -f docker-compose.production.yml ]; then
+              echo "ERROR: docker-compose.production.yml not found in /home/ubuntu/taski!"
+              exit 1
+            fi
+            
+            echo "File found. Starting deploy sequence..."
+            
+            echo "Pulling latest images..."
             sudo docker compose -f docker-compose.production.yml pull
+            
+            echo "Stopping old containers..."
             sudo docker compose -f docker-compose.production.yml down
+            
+            echo "Starting new containers..."
             sudo docker compose -f docker-compose.production.yml up -d
-            sudo docker compose -f docker-compose.production.yml exec backend python manage.py migrate
-            sudo docker compose -f docker-compose.production.yml exec backend python manage.py collectstatic
-            sudo docker compose -f docker-compose.production.yml exec backend cp -r /app/collected_static/. /backend_static/static/
+            
+            echo "Running migrations..."
+            sudo docker compose -f docker-compose.production.yml exec -T backend python manage.py migrate --noinput
+            
+            echo "Collecting static files..."
+            sudo docker compose -f docker-compose.production.yml exec -T backend python manage.py collectstatic --noinput
+            
+            echo "Deploy finished successfully!"
