@@ -140,53 +140,48 @@ jobs:
       - build_gateway_and_push_to_docker_hub
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
       
-      - name: Copy docker-compose file to server
+      - name: Copy docker-compose.yml via ssh
         uses: appleboy/scp-action@master
         with:
           host: \${{ secrets.HOST }}
           username: \${{ secrets.USER }}
           key: \${{ secrets.SSH_KEY }}
           source: "docker-compose.production.yml"
-          target: "/home/ubuntu/taski/"
+          target: "taski"
 
-      - name: Deploy via SSH
+      - name: Executing remote ssh commands to deploy
         uses: appleboy/ssh-action@master
         with:
           host: \${{ secrets.HOST }}
           username: \${{ secrets.USER }}
           key: \${{ secrets.SSH_KEY }}
           script: |
-            cd /home/ubuntu/taski
-            
-            if [ ! -f docker-compose.production.yml ]; then
-              echo "ERROR: docker-compose.production.yml not found!"
-              exit 1
-            fi
+            cd taski
             
             if [ ! -f .env ]; then
               echo "ERROR: .env file not found!"
               exit 1
             fi
-            
             if [ ! -r .env ]; then
               echo "ERROR: .env file is not readable!"
               exit 1
             fi
-            
+            echo ".env file checked."
+
             echo "Stopping old containers..."
             sudo docker compose -f docker-compose.production.yml down
             
             echo "Pulling latest images..."
             if ! sudo docker compose -f docker-compose.production.yml pull; then
-              echo "ERROR: Failed to pull images."
+              echo "ERROR: Failed to pull images. Check disk space or image names."
               exit 1
             fi
-            
+
             echo "Starting new containers..."
             sudo docker compose -f docker-compose.production.yml up -d
-            
+
             echo "Waiting for services to initialize..."
             sleep 15
             
@@ -199,6 +194,12 @@ jobs:
             echo "Collecting static files..."
             if ! sudo docker compose -f docker-compose.production.yml exec -T backend python manage.py collectstatic --noinput; then
               echo "ERROR: Collectstatic failed!"
+              exit 1
+            fi
+            
+            echo "Copying static files to volume..."
+            if ! sudo docker compose -f docker-compose.production.yml exec -T backend cp -r /app/collected_static/. /backend_static/static/; then
+              echo "ERROR: Failed to copy static files to volume!"
               exit 1
             fi
             
