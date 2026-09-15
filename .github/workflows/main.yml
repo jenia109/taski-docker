@@ -146,7 +146,7 @@ jobs:
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.HOST }}
-          username: \${{ secrets.USER }}
+          username: ${{ secrets.USER }}
           key: ${{ secrets.SSH_KEY }}
           source: "docker-compose.production.yml"
           target: "taski"
@@ -155,55 +155,47 @@ jobs:
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.HOST }}
-          username: \${{ secrets.USER }}
+          username: ${{ secrets.USER }}
           key: ${{ secrets.SSH_KEY }}
           debug: true
           script: |
-            cd taski
-            
-            echo "=== START DEPLOY SCRIPT ==="
+            if [ ! -d "taski" ]; then
+              echo "ERROR: Directory 'taski' does not exist on the server!"
+              exit 1
+            fi
 
+            cd taski
+
+            echo "=== START DEPLOY ==="
+            
             if [ ! -f .env ]; then
               echo "ERROR: .env file not found!"
               exit 1
             fi
-            echo ".env file checked."
+
+            echo "Testing sudo access..."
+            if ! sudo -n true 2>/dev/null; then
+              echo "ERROR: Sudo access failed!"
+              exit 1
+            fi
+            echo "Sudo access verified."
 
             echo "Stopping old containers..."
             sudo docker compose -f docker-compose.production.yml down
-            
+
             echo "Pulling latest images..."
-            if ! sudo docker compose -f docker-compose.production.yml pull; then
-              echo "ERROR: Failed to pull images!"
-              exit 1
-            fi
+            sudo docker compose -f docker-compose.production.yml pull
 
             echo "Starting new containers..."
             sudo docker compose -f docker-compose.production.yml up -d
 
-            echo "Waiting for services to initialize (15s)..."
-            sleep 15
-            
+            echo "Waiting for services to initialize (60s)..."
+            sleep 60  # <-- Увеличили время
+
             echo "Running migrations..."
-            if ! sudo docker compose -f docker-compose.production.yml exec -T backend python manage.py migrate --noinput; then
-              echo "ERROR: Migrations failed!"
-              exit 1
-            fi
-            
+            sudo docker compose -f docker-compose.production.yml exec -T backend python manage.py migrate --noinput
+
             echo "Collecting static files..."
-            if ! sudo docker compose -f docker-compose.production.yml exec -T backend python manage.py collectstatic --noinput; then
-              echo "ERROR: Collectstatic failed!"
-              exit 1
-            fi
-            
-            echo "Preparing static volume directory..."
-            sudo mkdir -p /backend_static/static
-            sudo chown -R $USER:$USER /backend_static/static
-            
-            echo "Copying static files to volume..."
-            if ! sudo docker compose -f docker-compose.production.yml exec -T backend cp -r /app/collected_static/. /backend_static/static/; then
-              echo "ERROR: Failed to copy static files!"
-              exit 1
-            fi
-            
+            sudo docker compose -f docker-compose.production.yml exec -T backend python manage.py collectstatic --noinput
+
             echo "=== DEPLOY FINISHED SUCCESSFULLY ==="
