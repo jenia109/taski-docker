@@ -11,7 +11,6 @@ DEBUG = False
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'taski2026zapto.duckdns.org',]
 
 
-
 # Application definition
 
 INSTALLED_APPS = [
